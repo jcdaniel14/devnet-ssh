@@ -1,7 +1,7 @@
 import paramiko
 import logging
 
-logger = logging.getLogger("pynet-ssh")
+logger = logging.getLogger("pynet_ssh")
 logger.setLevel(logging.ERROR)
 
 CISCO = 1
