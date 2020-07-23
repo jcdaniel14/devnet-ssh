@@ -13,14 +13,25 @@ SERVER = 99
 TIMEOUT_SEC = 10
 
 class SSHConnect:
-    prompt = ""
-    ios_type = CISCO
+    """
+    Class used to establish interactive SSH session
+    """
 
-    def __init__(self, host, pwd, ios_type=CISCO, port=22, user="automatico"):
+    def __init__(self, host, user, pwd, os_type=CISCO, port=22):
+        """ Initializes attributes and establishes connection to the device,
+
+        Args:
+            host (str): Hostname or IP address of the target device.
+            user (str): Username to authenticate
+            pwd (str): Password to authenticate
+            os_type (int, optional): Vendor Type, used to select prompt. Defaults to CISCO.
+            port (int, optional): Port used for SSH. Defaults to 22.
+        """
+
         # ==================== PROMPT DEFINITION
-        self.ios_type = ios_type
+        self.os_type = os_type
         self.host = host
-        self.prompt = self.find_prompt(ios_type)
+        self.prompt = self.find_prompt()
 
         # ==================== CONNECTION MANAGEMENT
         try:
@@ -42,9 +53,9 @@ class SSHConnect:
                 self.clear_banner()
 
                 # === DISABLE SCROLLING
-                if self.ios_type == HUAWEI:
+                if self.os_type == HUAWEI:
                     self.send_command("screen-length 0 temp")
-                elif self.ios_type == HP:
+                elif self.os_type == HP:
                     self.send_command("screen-length disable")
                 else:
                     self.send_command("terminal length 0")
@@ -52,33 +63,39 @@ class SSHConnect:
             logger.error(f"[PYNET-SSH]: {self.host} - {e}")
             raise
 
-    def find_prompt(self, ios_type):
-        switcher = {1: "#", 2: ">", 3: ">", 4:"#"}
-        return switcher.get(ios_type, "#")
+    def __del__(self):
+        self.ssh.close()
 
-    def clear_banner(self):
+    def _clear_banner(self):
+        """
+        Clears the banner MOTD/banner login
+        """
         buff = ""
         while not buff.endswith(self.prompt):
             resp = self.channel.recv(9999).decode("utf-8").strip()  # === Banner received
             buff += resp
 
-    def __del__(self):
-        self.ssh.close()
+    def _find_prompt(self):
+        """
+        Selects the apropiate prompt for the connection
 
-    def is_connected(self):
-        if self.ssh.get_transport() is not None:
-            return self.ssh.get_transport().is_active()
-        return False
+        Returns:
+            str: Prompt used for the connection.
+        """
+        switcher = {1: "#", 2: ">", 3: ">", 4:"#"}
+        return switcher.get(self.os_type, "#")
+    
+    def _read_char(self):
+        """
+        Reads whatever is on the channel, clears the device prompt and returns device console as a list
 
-    def disconnect(self):
-        self.ssh.close()
-
-    def commit(self):
-        self.send_command("commit")
-
-    def read_char(self):
+        Returns:
+            list: List with device output
+        """
         buffer = ""
         eol = ""
+        clear_console = []
+
         while not (eol.strip().endswith(self.prompt) and not eol.strip().endswith(" #")):
             resp = self.channel.recv(9999).decode("utf-8")  # === Line is received
             if len(resp) > 0:
@@ -87,7 +104,6 @@ class SSHConnect:
 
         buffer = buffer.replace("\r", "")
         console = buffer.split("\n")
-        clear_console = []
         
         for line in console:
             line = line.strip()
@@ -100,16 +116,41 @@ class SSHConnect:
 
         return clear_console
 
+    def disconnect(self):
+        """
+        Closes the connection
+        """
+        self.ssh.close()
+
+    def is_connected(self):
+        """
+        Checks if SSH session is active
+
+        Returns:
+            boolean: SSH session active or disconnected
+        """
+        if self.ssh.get_transport() is not None:
+            return self.ssh.get_transport().is_active()
+        return False
+
     def send_command(self, cmd):
+        """
+        Sends a command line to the device and returns its output.
+
+        Args:
+            cmd (str): Command line
+
+        Returns:
+            list: List with output as string
+        """
         buffer = []
-        if self.ios_type == HUAWEI or self.ios_type == HP:
+        if self.os_type == HUAWEI or self.os_type == HP:
             if cmd == "system":
                 self.prompt = "]"
             elif cmd == "return":
                 self.prompt = ">"
 
         cmd = cmd.strip()
-
         self.channel.send(cmd + "\n")
         try:
             buffer = self.read_char()
