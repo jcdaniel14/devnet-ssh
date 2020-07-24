@@ -1,21 +1,19 @@
 import paramiko
 import logging
 
-logger = logging.getLogger("pynet_ssh")
+logger = logging.getLogger("devnet_ssh")
 logger.setLevel(logging.ERROR)
-
-CISCO = 1
-HP = 2
-HUAWEI = 3
-IOSXR = 5
-SERVER = 99
-
-TIMEOUT_SEC = 10
 
 class SSHConnect:
     """
     Class used to establish interactive SSH session
     """
+    CISCO = 1
+    HP = 2
+    HUAWEI = 3
+    IOSXR = 5
+    SERVER = 99
+    TIMEOUT_SEC = 10
 
     def __init__(self, host, user, pwd, os_type=CISCO, port=22):
         """ Initializes attributes and establishes connection to the device,
@@ -31,7 +29,7 @@ class SSHConnect:
         # ==================== PROMPT DEFINITION
         self.os_type = os_type
         self.host = host
-        self.prompt = self.find_prompt()
+        self.prompt = self._find_prompt()
 
         # ==================== CONNECTION MANAGEMENT
         try:
@@ -44,18 +42,18 @@ class SSHConnect:
                 port=port,
                 look_for_keys=False,
                 allow_agent=False,
-                timeout=TIMEOUT_SEC,
-                banner_timeout=TIMEOUT_SEC,
-                auth_timeout=TIMEOUT_SEC
+                timeout=self.TIMEOUT_SEC,
+                banner_timeout=self.TIMEOUT_SEC,
+                auth_timeout=self.TIMEOUT_SEC
             )
             if self.is_connected():
                 self.channel = self.ssh.invoke_shell()
-                self.clear_banner()
+                self._clear_banner()
 
                 # === DISABLE SCROLLING
-                if self.os_type == HUAWEI:
+                if self.os_type == self.HUAWEI:
                     self.send_command("screen-length 0 temp")
-                elif self.os_type == HP:
+                elif self.os_type == self.HP:
                     self.send_command("screen-length disable")
                 else:
                     self.send_command("terminal length 0")
@@ -144,7 +142,7 @@ class SSHConnect:
             list: List with output as string
         """
         buffer = []
-        if self.os_type == HUAWEI or self.os_type == HP:
+        if self.os_type == self.HUAWEI or self.os_type == self.HP:
             if cmd == "system":
                 self.prompt = "]"
             elif cmd == "return":
@@ -153,7 +151,7 @@ class SSHConnect:
         cmd = cmd.strip()
         self.channel.send(cmd + "\n")
         try:
-            buffer = self.read_char()
+            buffer = self._read_char()
         except Exception as e:
             logger.error(f"[PYNET-SSH]: Couldn't send {cmd} to {self.host} - {e}" % (self.host, cmd, e))
             pass    # === Rarely the device wouldn't answer to the cmd, prevent main program from crashing
